@@ -135,3 +135,63 @@ remove_sg_rules() {
   echo "All rules disassociated from Security Group $sg_id."
 }
 
+delete_security_group() {
+  if [[ -z "$1" || -z "$2" ]]; then
+    echo "Usage: delete_security_group <aws_profile> <security_group_id>"
+    echo "  aws_profile       - AWS CLI profile to use."
+    echo "  security_group_id - The ID of the security group to delete."
+    return 1
+  fi
+
+  local aws_profile="$1"
+  local sg_id="$2"
+
+  # Check if the security group exists
+  echo "Checking if security group $sg_id exists..."
+  local sg_details
+  sg_details=$(aws ec2 describe-security-groups \
+    --profile "$aws_profile" \
+    --group-ids "$sg_id" \
+    --query "SecurityGroups[0]" \
+    --output json 2>/dev/null)
+
+  if [[ -z "$sg_details" || "$sg_details" == "null" ]]; then
+    echo "Error: Security group $sg_id does not exist."
+    return 1
+  fi
+
+  # Check if the security group is associated with any resources
+  echo "Checking for resources associated with security group $sg_id..."
+  local associated_resources
+  associated_resources=$(aws ec2 describe-network-interfaces \
+    --profile "$aws_profile" \
+    --filters "Name=group-id,Values=$sg_id" \
+    --query "NetworkInterfaces[].NetworkInterfaceId" \
+    --output text)
+
+  if [[ -n "$associated_resources" ]]; then
+    echo "Error: Security group $sg_id is associated with the following resources:"
+    echo "$associated_resources"
+    echo "Please disassociate these resources before deleting the security group."
+    return 1
+  fi
+
+  # Prompt user for confirmation
+  echo "Security group $sg_id is not associated with any resources."
+  echo -n "Are you sure you want to delete security group $sg_id? (yes/no): "
+  read confirm
+  if [[ "$confirm" != "yes" ]]; then
+    echo "Operation cancelled."
+    return 0
+  fi
+
+  # Delete the security group
+  echo "Deleting security group $sg_id..."
+  aws ec2 delete-security-group --profile "$aws_profile" --group-id "$sg_id"
+
+  if [[ $? -eq 0 ]]; then
+    echo "Security group $sg_id deleted successfully."
+  else
+    echo "Failed to delete security group $sg_id. Please check the AWS CLI output for details."
+  fi
+}
