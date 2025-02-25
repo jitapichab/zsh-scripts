@@ -1,5 +1,32 @@
 #!/bin/bash
 
+show_sg_tags() {
+  if [[ -z "$1" || -z "$2" ]]; then
+    echo "Usage: describe_sg_tags <aws_profile> <security_group_id>"
+    return 1
+  fi
+
+  local aws_profile="$1"
+  local sg_id="$2"
+
+  # Fetch and display security group tags
+  echo "Fetching tags for Security Group: $sg_id..."
+  local tags
+  tags=$(aws ec2 describe-security-groups \
+    --profile "$aws_profile" \
+    --group-ids "$sg_id" \
+    --query "SecurityGroups[0].Tags" \
+    --output table)
+
+  if [[ -z "$tags" || "$tags" == "None" ]]; then
+    echo "No tags found for Security Group: $sg_id."
+  else
+    echo "Tags for Security Group $sg_id:"
+    echo "$tags"
+  fi
+}
+
+
 remove_sg_rules() {
   if [[ -z "$1" || -z "$2" ]]; then
     echo "Usage: remove_sg_rules <aws_profile> <security_group_id>"
